@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Manage Employees — AML QC Admin</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#F1F5F9;font-family:'Segoe UI',system-ui,sans-serif;padding:32px 20px;min-height:100vh}
+  .wrap{max-width:680px;margin:0 auto}
+  h1{font-size:20px;font-weight:700;color:#1E293B;margin:0 0 4px}
+  .sub{font-size:13px;color:#64748B;margin-bottom:28px}
+  .panel{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:24px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+  h2{font-size:14px;font-weight:700;color:#1E293B;margin:0 0 16px}
+  label{display:block;font-size:11.5px;font-weight:700;color:#64748B;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+  input{width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:10px 13px;font-size:14px;color:#1E293B;font-family:inherit;transition:border-color .15s}
+  input:focus{outline:none;border-color:#2563EB}
+  .field{margin-bottom:14px}
+  .btn{padding:10px 22px;background:#2563EB;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer}
+  .btn:hover{background:#1d4ed8}
+  .result{background:#F0FDF4;border:1px solid #BBF7D0;border-left:3px solid #16A34A;border-radius:7px;padding:14px 16px;margin-top:16px;font-size:13px;display:none}
+  code{background:#1E293B;color:#E2E8F0;padding:10px 14px;border-radius:6px;display:block;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:13px;word-break:break-all;margin-top:8px;white-space:pre-wrap}
+  .copy-btn{margin-top:10px;padding:6px 14px;background:#fff;border:1.5px solid #E2E8F0;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;color:#64748B}
+  .warn{background:#FFFBEB;border:1px solid #FDE68A;border-left:3px solid #D97706;border-radius:7px;padding:12px 14px;font-size:13px;color:#92400E;margin-bottom:20px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Employee Credentials Manager</h1>
+  <p class="sub">Use this tool locally to generate credential entries for credentials.json</p>
+
+  <div class="warn">
+    <b>Admin use only.</b> Do not deploy this page to your public GitHub Pages site.
+    Run it locally by opening the file directly in your browser.
+  </div>
+
+  <div class="panel">
+    <h2>Generate Hash for New Employee</h2>
+    <div class="field">
+      <label for="newEmpId">Employee ID</label>
+      <input id="newEmpId" type="text" placeholder="e.g. EMP003" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label for="newPwd">Password</label>
+      <input id="newPwd" type="password" placeholder="Set a strong password" />
+    </div>
+    <button class="btn" onclick="generate()">Generate Entry</button>
+
+    <div class="result" id="result">
+      <b>Add this line to credentials.json:</b>
+      <code id="hashOut"></code>
+      <button class="copy-btn" onclick="copyHash()">Copy</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>How to add to credentials.json</h2>
+    <ol style="font-size:13.5px;color:#475569;line-height:2;padding-left:18px;margin:0">
+      <li>Generate the entry above</li>
+      <li>Open <code style="background:#F1F5F9;color:#1E293B;display:inline;padding:2px 6px;border-radius:4px">credentials.json</code> in a text editor</li>
+      <li>Add the new line inside the <code style="background:#F1F5F9;color:#1E293B;display:inline;padding:2px 6px;border-radius:4px">{ }</code> block (add a comma after the previous line)</li>
+      <li>Save the file and push to GitHub — the change goes live automatically</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function generate() {
+  const empId = document.getElementById('newEmpId').value.trim().toUpperCase();
+  const pwd = document.getElementById('newPwd').value;
+  if (!empId || !pwd) { alert('Fill in both fields.'); return; }
+  const hash = await sha256(pwd);
+  document.getElementById('hashOut').textContent = `"${empId}": "${hash}"`;
+  document.getElementById('result').style.display = 'block';
+}
+
+function copyHash() {
+  navigator.clipboard.writeText(document.getElementById('hashOut').textContent).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+</script>
+</body>
+</html>

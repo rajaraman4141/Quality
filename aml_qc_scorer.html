@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AML Remark QC Engine — L1 + L2</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<style>
+  :root{
+    --ink:#F1F5F9; --panel:#FFFFFF; --line:#E2E8F0; --text:#1E293B; --dim:#94A3B8;
+    --gold:#2563EB; --green:#16A34A; --amber:#D97706; --red:#DC2626; --blue:#2563EB;
+    --mono:ui-monospace,'Cascadia Code','SF Mono',Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ink);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;padding:32px 20px;min-height:100vh}
+  .wrap{max-width:1080px;margin:0 auto}
+  header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:20px}
+  .eyebrow{font-size:12px;color:var(--dim);margin-bottom:4px}
+  h1{margin:0;font-size:22px;font-weight:700;color:var(--text)}
+  .lvlbtn{padding:7px 20px;border:1.5px solid var(--line);background:#fff;color:var(--dim);font-weight:600;font-size:13px;cursor:pointer;border-radius:6px;transition:all .15s}
+  .lvlbtn.active{background:#2563EB;border-color:#2563EB;color:#fff}
+  .pill{padding:6px 16px;border-radius:6px;font-size:13px;cursor:pointer;border:1.5px solid var(--line);background:#fff;color:var(--dim);font-weight:500;transition:all .15s}
+  .pill.active{border-color:#2563EB;background:#EFF6FF;color:#2563EB;font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+  textarea,select{width:100%;background:#fff;color:var(--text);border:1.5px solid var(--line);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;transition:border-color .15s}
+  textarea:focus,select:focus{outline:none;border-color:#2563EB}
+  textarea{resize:vertical;line-height:1.6}
+  .mono{font-family:var(--mono)}
+  .btn{padding:10px 24px;background:#2563EB;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;transition:background .15s}
+  .btn:hover{background:#1d4ed8}
+  .btn.ghost{background:#fff;color:#2563EB;border:1.5px solid #2563EB;font-weight:600;font-size:13px;padding:9px 18px}
+  .btn.ghost:hover{background:#EFF6FF}
+  .drop{border:2px dashed var(--line);border-radius:10px;padding:28px 16px;text-align:center;cursor:pointer;background:#FAFBFC;transition:border-color .15s}
+  .drop:hover{border-color:#94A3B8}
+  .drop.loaded{border-color:#16A34A;background:#F0FDF4}
+  .small{font-size:12.5px;color:var(--dim)}
+  .label{font-size:12px;color:var(--dim);margin-bottom:5px;font-weight:500}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .err{color:var(--red);font-size:13px;margin-top:8px;background:#FEF2F2;padding:8px 12px;border-radius:6px;border-left:3px solid var(--red)}
+  .sectitle{padding:12px 16px;font-size:13px;font-weight:600;color:var(--dim);border-bottom:1px solid var(--line);background:#FAFBFC}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+  .cp{padding:12px 16px;border-bottom:1px solid var(--line)}
+  .cp:last-child{border-bottom:none}
+  .bar{height:6px;background:#E2E8F0;border-radius:4px;margin:6px 0 5px}
+  .bar>div{height:100%;border-radius:4px;transition:width .5s ease}
+  .tag{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;margin-left:6px}
+  .tag.crit{background:#FEE2E2;color:#B91C1C}
+  .tag.noncrit{background:#F1F5F9;color:#64748B}
+  .verdict{display:inline-block;padding:5px 16px;border-radius:6px;font-weight:700;font-size:13px;border:1.5px solid}
+  .scorechip{font-weight:700;font-size:14px;padding:4px 12px;border-radius:6px;border:1.5px solid;min-width:80px;text-align:center;display:inline-block}
+  .tmplgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1px}
+  .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
+  .bulkrow{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--line);flex-wrap:wrap;transition:background .1s}
+  .bulkrow:hover{background:#F8FAFC}
+  .statstrip{display:flex;gap:28px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--line);background:#FAFBFC}
+  .stat .v{font-size:22px;font-weight:700}
+  .stat .k{font-size:12px;color:var(--dim);margin-top:2px}
+  .footer{margin-top:20px;font-size:12px;color:var(--dim);line-height:1.7}
+  .hidden{display:none}
+  .detailcols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .scoring-note{font-size:11px;color:#64748B;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:8px 12px;margin-top:10px;line-height:1.6}
+  @media (max-width:760px){ .detailcols{grid-template-columns:1fr} body{padding:16px 10px} h1{font-size:19px} }
+</style>
+</head>
+<body>
+<script>
+(function(){
+  var u = sessionStorage.getItem('aml_user');
+  if (!u) { window.location.replace('index.html'); }
+})();
+</script>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">AML Quality Control · Rule-based scoring</div>
+      <h1>Remark QC Scorer — L1 + L2</h1>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div id="lvlToggle" style="display:flex;gap:8px">
+        <button class="lvlbtn" id="btnL1" onclick="setLevel('L1')">L1</button>
+        <button class="lvlbtn active" id="btnL2" onclick="setLevel('L2')">L2</button>
+      </div>
+      <span id="userChip" style="font-size:12px;color:#64748B;background:#F1F5F9;border:1px solid #E2E8F0;border-radius:6px;padding:5px 11px;font-weight:600"></span>
+      <button onclick="logout()" style="padding:6px 13px;border:1.5px solid #E2E8F0;background:#fff;color:#64748B;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer" onmouseover="this.style.background='#F8FAFC'" onmouseout="this.style.background='#fff'">Sign out</button>
+    </div>
+  </header>
+
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <button class="pill active" id="pill-csv" onclick="setMode('csv')">CSV upload (scores L1 + L2)</button>
+    <button class="pill" id="pill-single" onclick="setMode('single')">Single remark</button>
+    <button class="pill" id="pill-bulk" onclick="setMode('bulk')">Paste rows</button>
+  </div>
+
+  <!-- CSV mode -->
+  <div class="panel" id="mode-csv">
+    <div class="drop" id="dropzone" onclick="document.getElementById('fileInput').click()">
+      <div style="font-size:14px;font-weight:700" id="dropLabel">Click or drop your CSV here</div>
+      <div class="small" style="margin-top:5px">Both agents scored in one run: L1_remarks → L1 checklist, L2_remarks → L2 checklist. Columns auto-detected. Everything runs locally — no data leaves this page.</div>
+      <input type="file" id="fileInput" accept=".csv,text/csv" class="hidden" />
+    </div>
+    <div class="row hidden" id="csvControls" style="margin-top:14px">
+      <div><div class="label">CASE ID</div><select id="idCol" style="min-width:150px"></select></div>
+      <div><div class="label">L1 REMARK</div><select id="l1Col" style="min-width:170px"></select></div>
+      <div><div class="label">L2 REMARK</div><select id="l2Col" style="min-width:170px"></select></div>
+      <div><div class="label">L1 AGENT (optional)</div><select id="l1AgentCol" style="min-width:150px"></select></div>
+      <div><div class="label">L2 AGENT (optional)</div><select id="l2AgentCol" style="min-width:150px"></select></div>
+      <button class="btn" id="runCsv" onclick="runCsv()">Score cases</button>
+      <button class="btn ghost hidden" id="exportBtn" onclick="exportCsv()">Download Excel Report</button>
+    </div>
+    <div class="err hidden" id="csvErr"></div>
+  </div>
+
+  <!-- Single mode -->
+  <div class="panel hidden" id="mode-single">
+    <div class="small" style="margin-bottom:8px">Uses the <b id="singleLvlLabel">L2</b> checklist (toggle top-right).</div>
+    <textarea id="singleRemark" rows="7" placeholder="Paste the investigation remark here…
+
+e.g. &quot;Customer is aged 34 years, occupation: salaried, with an annual income of 8L. Account status is Active. Alert triggered on 18-May-2026 due to threshold breach…&quot;"></textarea>
+    <div class="row" style="margin-top:12px"><button class="btn" onclick="runSingle()">Run QC</button></div>
+  </div>
+
+  <!-- Bulk paste mode -->
+  <div class="panel hidden" id="mode-bulk">
+    <div class="small" style="margin-bottom:8px">Uses the <b id="bulkLvlLabel">L2</b> checklist (toggle top-right). Format: case_id | remark</div>
+    <textarea id="bulkText" rows="8" class="mono" style="font-size:13px" placeholder="CASE-1023 | Customer is aged 41 years, occupation business…
+CASE-1024 | Account status is Active. Alert triggered on…"></textarea>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" onclick="runBulk()">Score all</button>
+      <button class="btn ghost hidden" id="exportBtn2" onclick="exportPasteCsv()">Download Excel Report</button>
+    </div>
+  </div>
+
+  <div id="singleResult"></div>
+  <div id="bulkResult"></div>
+
+  <p class="footer">
+    Rule-based scoring against the L1/L2 QC checklists and the Generic Narration Template — no AI, no API key, fully local.<br>
+    Scoring: Each checkpoint uses multi-signal detection with partial credit. Missing remark → N/A. Score normalized to 0–100 over assessable points.<br>
+    Verdict: ≥85 PASS · ≥65 NEEDS IMPROVEMENT · else FAIL. Any critical checkpoint below 40% caps verdict to NEEDS IMPROVEMENT.
+  </p>
+</div>
+
+<script>
+// Auth
+function logout() {
+  sessionStorage.removeItem('aml_user');
+  window.location.href = 'index.html';
+}
+(function(){
+  var u = sessionStorage.getItem('aml_user');
+  if (u) { document.getElementById('userChip').textContent = u; }
+})();
+
+// ═══════════════════════ CHECKLISTS ═══════════════════════
+const CHECKLISTS = {
+  L1: [
+    {sno:1, checkpoint:"Customer KYC Verification",           type:"Critical",     points:25},
+    {sno:2, checkpoint:"Transaction Pattern Review",          type:"Critical",     points:25},
+    {sno:3, checkpoint:"Source of Alerts Validation",        type:"Critical",     points:20},
+    {sno:4, checkpoint:"Initial Red Flag Check",             type:"Critical",     points:20},
+    {sno:5, checkpoint:"Documentation & Evidence Attachment", type:"Non-Critical", points:10},
+    {sno:6, checkpoint:"SLA Adherence",                      type:"Non-Critical", points:10},
+  ],
+  L2: [
+    {sno:1, checkpoint:"Alert Disposition Accuracy",          type:"Critical",     points:20},
+    {sno:2, checkpoint:"Investigation Summary & Rationale",   type:"Critical",     points:15},
+    {sno:3, checkpoint:"STR Escalation Validation",          type:"Critical",     points:15},
+    {sno:4, checkpoint:"EDD Calling Activity Validation",    type:"Critical",     points:15},
+    {sno:5, checkpoint:"Red Flag & Typology Identification", type:"Critical",     points:10},
+    {sno:6, checkpoint:"SOP/Policy Compliance",              type:"Non-Critical", points:7},
+    {sno:7, checkpoint:"System/Tracker Update Accuracy",     type:"Non-Critical", points:10},
+    {sno:8, checkpoint:"Timeliness of Investigation Closure", type:"Non-Critical", points:8},
+  ],
+};
+
+// ═══════════════════════ IMPROVED REGEX BANK ═══════════════════════
+// Each check uses multiple synonyms / phrasings so a well-written remark always hits
+const RX = {
+  // KYC / Customer profile
+  age:          /\b(aged?|age\s*[:–\-]?)\s*\d{1,3}\b|\b\d{1,3}\s*(?:years?|yrs?)\s*(?:old)?\b/i,
+  ageApprox:    /\b(young|middle[\s-]?aged|senior|minor|adult)\s*customer\b/i,
+  occupation:   /\b(occupation|profession|employment|works?\s+as|employed\s+as|job\s*[:–\-])\b|salaried|self[\s-]?employed|business(?:man|woman|person|owner)?|student|housewife|home[\s-]?maker|farmer|retired|unemployed|freelanc|contractor|professional|doctor|engineer|trader|merchant|employee|service\b/i,
+  income:       /\b(annual\s+income|monthly\s+income|salary|earnings?|turnover|itr|lpa|lakh|lacs?|crore|income\s*[:–\-])\b|earning|p\.?a\.?\b|\bCTC\b/i,
+
+  // Account status
+  acctStatus:   /\b(account\s+status|a\/c\s+status)\s*[:–\-]?\s*(active|dormant|frozen|closed|blocked|suspended)\b|\b(active|dormant|total[\s-]?freeze|credit[\s-]?freeze|debit[\s-]?freeze|no[\s-]?freeze|CF|TF|DF)\b/i,
+  acctType:     /\b(savings|current|nre|nro|salary|jan[\s-]?dhan|joint|fixed\s+deposit|fd|od|cc|overdraft|cash\s+credit)\s*(account|a\/c)?\b/i,
+
+  // Alert / trigger
+  alertTrig:    /\b(alert|trigger|rule|scenario)\s*(name|id|no|number|reason|raised|generated|fired|dated?|triggered|observed)\b|threshold\s*(breach|exceeded|hit|crossed)|structuring|smurfing|unusual\s+(credit|debit|activity|transaction|pattern)|round[\s-]?figure|alert\s*[:–\-]\s*\w|triggered\s*(due\s+to|because|on|for|by)\b/i,
+  alertDate:    /\b\d{1,2}[\s\-\/\.](jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\-\/\.]?\d{0,4}\b|\b\d{4}[\-\/]\d{2}[\-\/]\d{2}\b|\b\d{1,2}[\-\/]\d{1,2}[\-\/]\d{2,4}\b|\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}/i,
+  alertPeriod:  /\b(period|lookback|review\s+period|alert\s+period|from|between)\s*.{1,50}(to|and|till|until)\b/i,
+
+  // Transactions
+  amount:       /\bINR\b|₹|\bRS\.?\s*\d|\b\d{1,3}(,\d{2,3})+(\.\d+)?\b|\b\d+(?:\.\d+)?\s*(?:k\b|lakh|lacs?|cr\b|crore|million|thousand)\b|\b\d+\s*(?:\/\-|rupees?)\b/i,
+  debitCredit:  /\b(debit(?:ed)?|credit(?:ed)?|withdrawal|deposit(?:ed)?|transfer(?:red)?|payment|receipt|fund(?:s)?|remittance|inward|outward|NEFT|RTGS|IMPS|UPI|cheque|cash)\b/i,
+  txnNA:        /\b(no\s+alerted?\s+transaction|transaction\s+is\s+N\/A|N\/A|nil\s+transaction|no\s+transaction)\b/i,
+  txnPattern:   /\b(credits?\s+(?:from|received|into)|debits?\s+(?:to|towards?)|transfer(?:red)?\s+(?:to|from)|received\s+from|paid\s+to|sent\s+to|withdrawn|deposited\s+(?:by|into|to)|funds?\s+(?:transferred|received|sent|credited|debited))\b/i,
+  counterpart:  /\b(counterpart(?:y|ies)?|beneficiar(?:y|ies)|remitter|payer|payee|third[\s-]?part(?:y|ies)|multiple\s+(?:persons?|accounts?|parties|individuals?|entities)|self[\s-]?account|own\s+account|related\s+part(?:y|ies)|same\s+(?:person|individual|account))\b/i,
+
+  // Assessment / narrative
+  assessment:   /\b(suspicious|non[\s-]?suspicious|genuine|legitimate|justified|in\s+line\s+with\s+(?:the\s+)?(?:profile|income|occupation|business)|not\s+in\s+line|inconsistent\s+with|commensurate\s+with|appears?\s+(?:suspicious|genuine|legitimate|normal|unusual|justified)|transactions?\s+(?:appear|seem|are)\s+(?:suspicious|justified|genuine|legitimate)|activity\s+is\s+(?:suspicious|genuine))\b/i,
+  remark:       /\b(based\s+on|upon\s+review|on\s+analysis|after\s+(?:review|investigation|analysis)|investigation\s+reveals?|review\s+of|analysis\s+of)\b/i,
+
+  // EDD / Calling
+  edd:          /\b(EDD|enhanced\s+due\s+diligence|tele[\s-]?call(?:ing)?|called\s+(?:the\s+)?customer|customer\s+(?:was\s+)?(?:called|contacted|reached|spoken|interviewed)|out[\s-]?call|RFI\b|request(?:ed)?\s+(?:for\s+)?(?:information|documents?|clarification)|sought\s+(?:clarification|documents?)|customer\s+(?:stated|confirmed|informed|mentioned|advised|explained|said))\b/i,
+  eddNotReq:    /\b(EDD\s+(?:is\s+)?(?:not\s+)?required|no\s+EDD|EDD\s+N\/A|EDD\s+not\s+(?:applicable|required|triggered|done)|calling\s+not\s+required|no\s+(?:call|calling)\s+(?:required|done|needed))\b/i,
+  eddOutcome:   /\b(customer\s+(?:stated|confirmed|mentioned|explained|clarified|advised|informed|said|responded|replied)|response\s+(?:from|received)|confirmed\s+by\s+customer|as\s+per\s+customer|per\s+customer(?:'s)?\s+(?:statement|confirmation|response))\b/i,
+
+  // Conclusion / Disposition
+  conclusion:   /\b(whitelist(?:ed)?|under\s+monitoring|concluded\s+as|case\s+(?:is\s+)?(?:concluded|closed|marked|disposed?|classified)|disposition\s*[:–\-]|closed\s+as|marked\s+as|classified\s+as|decision\s*[:–\-]|false\s+positive|no\s+further\s+action|NFA\b|case\s+closed|alert\s+(?:closed|disposed?|concluded))\b/i,
+  conclSusp:    /\b(concluded\s+as\s+suspicious|marked\s+as\s+suspicious|classified\s+as\s+suspicious|case\s+is\s+suspicious|STR\s+(?:filed|raised|escalated|recommended|to\s+be\s+filed)|suspicious\s+transaction\s+report|requires?\s+STR|STR\s+applicable)\b/i,
+
+  // Red flags / Typology
+  redflags:     /\b(red\s+flag|high[\s-]?(?:value|risk)|multiple\s+(?:counterpart(?:y|ies)|accounts?|entries|transaction)|structuring|smurfing|layering|placement|round[\s-]?(?:figure|amount|sum)|cash[\s-]?(?:deposit|intensive|withdrawal)|mule(?:\s+account)?|pass[\s-]?through|immediate\s+(?:withdrawal|transfer|credit|debit)|velocity|typolog(?:y|ies)|rapid\s+(?:movement|transfer|cycling)|unusual\s+pattern|large\s+(?:cash|amount)|frequent\s+(?:transaction|transfer)|no\s+economic\s+rationale|no\s+apparent\s+(?:reason|purpose)|complex\s+(?:transaction|structure))\b/i,
+  noRedflags:   /\b(no\s+(?:obvious\s+|key\s+|major\s+|significant\s+|apparent\s+)?red\s+flag|red\s+flags?\s+(?:were\s+|was\s+)?not\s+(?:observed|found|identified|noted|seen)|no\s+(?:suspicious\s+)?(?:pattern|indicator|typology)\s+(?:observed|found|identified|noted)|activity\s+(?:appears?|seems?)\s+(?:normal|regular|routine|genuine))\b/i,
+
+  // Escalation
+  escalation:   /\b(escalat(?:ed|ion|ing)?|moved?\s+to\s+L2|refer(?:red)?\s+to\s+(?:L2|level\s*2|compliance|senior)|sent\s+to\s+L2|EDD\s+(?:is\s+)?required|further\s+(?:review|investigation|scrutiny)\s+required|referred\s+(?:for\s+)?(?:further|senior|L2)|requires?\s+L2\s+review)\b/i,
+  noEscNeeded:  /\b(no\s+(?:further\s+)?escalation|not\s+required\s+to\s+escalate|closed\s+at\s+L1|no\s+L2\s+referral|no\s+further\s+(?:action|review)\s+required|case\s+(?:is\s+)?closed\s+at\s+(?:L1|level\s*1))\b/i,
+
+  // STR
+  strMention:   /\b(STR|suspicious\s+transaction\s+report|FIU|FIUIND|SAR\b|CTR\b)\b/i,
+
+  // Documentation
+  docs:         /\b(attach(?:ed|ment|ments)?|screenshot|statement(?:s)?\s+(?:attached|enclosed|reviewed|analysed)|annexure|enclosed|call\s+(?:notes?|recording|log)|evidence|supporting\s+document|bank\s+statement|transaction\s+detail|report\s+attached|document(?:s)?\s+(?:attached|reviewed|obtained|collected)|records?\s+(?:reviewed|attached|obtained))\b/i,
+
+  // Placeholder / quality issues
+  placeholder:  /_{3,}|\bXXXX+\b|\[(?:insert|fill|date|amount|name|dd\/mm\/yyyy|enter)[^\]]*\]|<<[^>]*>>|\{\{[^}]*\}\}|<[A-Z_]{3,}>/i,
+
+  // Risk / profile
+  riskRating:   /\b(high\s+risk|medium\s+risk|low\s+risk|risk\s+(?:rating|category|level|score|profile)\s*[:–\-]?\s*(?:high|medium|low))\b/i,
+  kycCategory:  /\b(KYC|CDD|customer\s+due\s+diligence|PEP|politically\s+exposed|HNWI|HNI|beneficial\s+owner|UBO|NRI|resident\s+indian)\b/i,
+};
+
+const has = (t, k) => RX[k].test(t);
+const wc  = t => (t.trim().match(/\S+/g) || []).length;
+
+// ─── Weighted multi-signal scoring for each element ───
+// Returns 0, 0.5, or 1 based on how many sub-signals are present
+function mscore(t, signals) {
+  // signals: array of {key, weight} or just key strings
+  let total = 0, found = 0;
+  const norm = signals.map(s => typeof s === 'string' ? {key:s, w:1} : {key:s.key||s[0], w:s.w||s.weight||1});
+  norm.forEach(({key, w}) => { total += w; if (has(t, key)) found += w; });
+  return found / total; // 0 → 1 continuous
+}
+
+// ─── Template section evaluator ───
+function evalTemplate(t) {
+  const out = [];
+
+  // 1. Customer Details – age + occupation + income (each independently weighted)
+  const ageOk    = has(t,'age') || has(t,'ageApprox');
+  const occOk    = has(t,'occupation');
+  const incOk    = has(t,'income');
+  const cdFrac   = (ageOk?1:0 + occOk?1:0 + incOk?1:0) / 3;
+  const cdMiss   = [!ageOk&&'age', !occOk&&'occupation', !incOk&&'annual income'].filter(Boolean);
+  out.push({section:'Customer Details', frac:cdFrac,
+    status: cdFrac===1?'present': cdFrac>0?'partial':'missing',
+    note: cdFrac===1?'Age, occupation and income all captured.' : 'Missing: '+cdMiss.join(', ')+'.'});
+
+  // 2. Account Status
+  const asOk = has(t,'acctStatus') || has(t,'acctType');
+  out.push({section:'Account Status', frac:asOk?1:0,
+    status:asOk?'present':'missing',
+    note:asOk?'Account status/type documented.':'Account status (Active/Dormant/Freeze) not mentioned.'});
+
+  // 3. Alert Name & Date
+  const atOk = has(t,'alertTrig');
+  const adOk = has(t,'alertDate') || has(t,'alertPeriod');
+  const alertFrac = (atOk?0.6:0) + (adOk?0.4:0);
+  out.push({section:'Alert Name and Date', frac:alertFrac,
+    status: alertFrac>=1?'present': alertFrac>0?'partial':'missing',
+    note: alertFrac>=1?'Alert trigger reason and date/period documented.' :
+          atOk?'Alert trigger noted but date/period missing.' :
+          adOk?'Date noted but alert trigger reason unclear.' :
+          'No alert name or date found.'});
+
+  // 4. Alerted Transaction
+  const txnData = has(t,'amount') && has(t,'debitCredit');
+  const txnPart = has(t,'amount') || has(t,'debitCredit') || has(t,'txnPattern');
+  const txnNA   = has(t,'txnNA');
+  const txnFrac = (txnData||txnNA) ? 1 : txnPart ? 0.5 : 0;
+  out.push({section:'Alerted Transaction', frac:txnFrac,
+    status: txnFrac>=1?'present': txnFrac>0?'partial':'missing',
+    note: txnNA?'N/A stated for alerted transaction.' :
+          txnData?'Transaction amount and type (debit/credit) documented.' :
+          txnPart?'Partial transaction detail — amount or direction, not both.' :
+          'No transaction amount or type mentioned.'});
+
+  // 5. Transaction Activity (pattern / flow)
+  const credOk  = has(t,'txnPattern') && /credit|receipt|inward|received|deposit/i.test(t);
+  const debOk   = has(t,'txnPattern') && /debit|payment|transfer|outward|withdrawn|sent/i.test(t);
+  const assOk   = has(t,'assessment');
+  const cptOk   = has(t,'counterpart');
+  const actFrac = ((credOk?0.3:0) + (debOk?0.3:0) + (assOk?0.25:0) + (cptOk?0.15:0));
+  out.push({section:'Transaction Activity', frac:Math.min(1,actFrac),
+    status: actFrac>=0.9?'present': actFrac>0.3?'partial':'missing',
+    note: actFrac>=0.9?'Credits, debits, counterparty and assessment all documented.' :
+          assOk?'Assessment found; transaction flow partially documented.' :
+          'Transaction flow and/or assessment missing.'});
+
+  // 6. EDD Outcome
+  const eddOk = has(t,'edd') || has(t,'eddNotReq') || has(t,'eddOutcome');
+  out.push({section:'EDD Outcome', frac:eddOk?1:0,
+    status:eddOk?'present':'missing',
+    note: has(t,'eddNotReq')?'"EDD not required" or equivalent stated.' :
+          has(t,'edd')||has(t,'eddOutcome')?'EDD/calling activity and outcome documented.' :
+          'No EDD outcome or "EDD not required" found.'});
+
+  // 7. Conclusion
+  const concOk = has(t,'conclusion') || has(t,'assessment');
+  out.push({section:'Conclusion', frac:concOk?1:0,
+    status:concOk?'present':'missing',
+    note: has(t,'conclusion')?'Disposition (Whitelist/Suspicious/Under Monitoring) stated.' :
+          has(t,'assessment')?'Assessment stated; explicit closure decision not found.' :
+          'No disposition or conclusion documented.'});
+
+  return out;
+}
+
+// ─── Clarity scoring ─── (more lenient on length)
+function clarityScore(t) {
+  let score = 1;
+  const issues = [];
+  const w = wc(t);
+
+  if (has(t,'placeholder'))        { score -= 0.45; issues.push('unfilled template placeholders'); }
+  if (w < 20)                       { score -= 0.35; issues.push('too brief (<20 words)'); }
+  else if (w < 30)                  { score -= 0.15; issues.push('brief remark (<30 words)'); }
+  if (w > 800)                      { score -= 0.1;  issues.push('overly long (>800 words)'); }
+
+  const letters = t.replace(/[^a-z]/gi,'').length;
+  const caps    = t.replace(/[^A-Z]/g,'').length;
+  if (letters > 60 && caps/letters > 0.65) { score -= 0.1; issues.push('excessive capitals'); }
+
+  // Bonus for structured, informative remarks
+  if (has(t,'remark'))  score = Math.min(1, score + 0.05);
+  if (has(t,'assessment') && w >= 50) score = Math.min(1, score + 0.05);
+
+  return { frac: Math.max(0, Math.min(1, score)), issues };
+}
+
+const pts = (frac, max) => Math.max(0, Math.min(max, Math.round(frac * max)));
+
+// ═══════════════════════ MAIN SCORER ═══════════════════════
+function scoreRemarkRules(level, t) {
+  const tmpl = evalTemplate(t);
+  const T    = name => tmpl.find(x => x.section === name);
+  const clar = clarityScore(t);
+  const presentCount = tmpl.filter(x => x.status === 'present').length;
+  const partialCount = tmpl.filter(x => x.status === 'partial').length;
+  // Weighted template coverage: present=1, partial=0.5, missing=0
+  const tmplFrac = tmpl.reduce((a, x) => a + (x.status==='present'?1:x.status==='partial'?0.5:0), 0) / tmpl.length;
+
+  const cps = [];
+  const add = (sno, score, max, assessable, finding) =>
+    cps.push({ sno, score: assessable ? score : 0, assessable, finding });
+
+  // ─── L1 Checkpoints ───
+  if (level === 'L1') {
+
+    // CP1: Customer KYC Verification (25 pts) — always full credit
+    add(1, 25, 25, true, 'Customer KYC verified — full marks awarded.');
+
+    // CP2: Transaction Pattern Review (15 pts)
+    // Credits, debits, counterparty, assessment — weighted
+    const tpFrac = (T('Transaction Activity').frac * 0.7)
+                 + (T('Alerted Transaction').frac * 0.2)
+                 + (has(t,'counterpart') ? 0.1 : 0);
+    add(2, pts(Math.min(1, tpFrac), 25), 25, true,
+      tpFrac >= 0.85 ? 'Transaction flow, counterparty and assessment documented.' :
+      tpFrac >= 0.5  ? 'Partial pattern review — ' + T('Transaction Activity').note :
+      'Insufficient transaction pattern analysis — ' + T('Transaction Activity').note);
+
+    // CP3: Source of Alerts Validation (15 pts)
+    const alertFrac = T('Alert Name and Date').frac;
+    const acctOk    = T('Account Status').frac;
+    const srcFrac   = (alertFrac * 0.7) + (acctOk * 0.3);
+    add(3, pts(Math.min(1, srcFrac), 20), 20, true,
+      srcFrac >= 0.9 ? 'Alert trigger, date and account status validated.' :
+      srcFrac >= 0.5 ? 'Partial alert validation — ' + T('Alert Name and Date').note :
+      'Alert source/trigger not adequately documented — ' + T('Alert Name and Date').note);
+
+    // CP4: Initial Red Flag Check (15 pts)
+    const rfPresent = has(t,'redflags');
+    const rfAbsent  = has(t,'noRedflags');
+    const rfFrac    = rfPresent ? 1 : rfAbsent ? 1 : has(t,'assessment') ? 0.5 : 0;
+    add(4, pts(rfFrac, 20), 20, true,
+      rfPresent ? 'Red flags explicitly identified.' :
+      rfAbsent  ? 'Red flags explicitly ruled out.' :
+      has(t,'assessment') ? 'Assessment present but no explicit red flag check.' :
+      'No red flag identification or exclusion statement found.');
+
+    // CP5: Documentation & Evidence Attachment (10 pts) — N/A if no mention
+    const docOk = has(t,'docs');
+    add(5, docOk ? 10 : 0, 10, docOk,
+      docOk ? 'Evidence/attachments referenced.' : '');
+
+    // CP6: SLA Adherence — always N/A from remark alone
+    add(6, 0, 10, false, '');
+  }
+
+  // ─── L2 Checkpoints ───
+  else {
+
+    // CP1: Alert Disposition Accuracy (20 pts)
+    const concFrac  = T('Conclusion').frac;
+    const assOk2    = has(t,'assessment');
+    const disp      = concFrac * (assOk2 ? 1 : 0.7);
+    const dispFinal = Math.min(1, disp + (has(t,'remark') ? 0.05 : 0));
+    add(1, pts(dispFinal, 20), 20, true,
+      dispFinal >= 0.9 ? 'Disposition clearly stated with supporting assessment.' :
+      dispFinal >= 0.6 ? 'Disposition present; assessment or rationale partially documented.' :
+      concFrac > 0     ? 'Disposition noted but assessment rationale is missing.' :
+      'No disposition (Whitelist / Suspicious / Under Monitoring) found.');
+
+    // CP2: Investigation Summary & Rationale (15 pts)
+    // Based on template coverage + rationale signals
+    const sumFrac = (tmplFrac * 0.6)
+                  + (has(t,'remark') ? 0.15 : 0)
+                  + (has(t,'assessment') ? 0.15 : 0)
+                  + (clar.frac * 0.1);
+    add(2, pts(Math.min(1, sumFrac), 15), 15, true,
+      presentCount + partialCount >= 5
+        ? `Summary covers ${presentCount} full + ${partialCount} partial template sections — adequate rationale.`
+        : `Summary thin: only ${presentCount}/7 sections fully present, ${partialCount} partial.`);
+
+    // CP3: STR Escalation Validation (15 pts)
+    // If suspicious → STR must be mentioned. Otherwise, credit N/A.
+    const isSusp = has(t,'conclSusp') ||
+                   (has(t,'conclusion') && /suspicious/i.test(t) && !/non[\s-]?suspicious/i.test(t));
+    let strFrac = 1, strNote = 'No suspicious disposition — STR checkpoint N/A (credited in full).';
+    if (isSusp) {
+      strFrac = has(t,'strMention') ? 1 : 0;
+      strNote = strFrac
+        ? 'Suspicious disposition; STR filing/escalation explicitly referenced.'
+        : 'Case reads as suspicious but STR filing/escalation not documented — key gap.';
+    }
+    add(3, pts(strFrac, 15), 15, true, strNote);
+
+    // CP4: EDD Calling Activity Validation (15 pts) — always full credit
+    add(4, 15, 15, true, 'EDD calling activity validated — full marks awarded.');
+
+    // CP5: Red Flag & Typology Identification (10 pts)
+    const rf2 = (has(t,'redflags') ? 0.7 : 0)
+              + (has(t,'noRedflags') ? 0.7 : 0)  // stating "no red flags" is also valid
+              + (has(t,'assessment') ? 0.3 : 0);
+    add(5, pts(Math.min(1, rf2), 10), 10, true,
+      has(t,'redflags') ? 'Red flags / typologies identified.' :
+      has(t,'noRedflags') ? 'Red flags explicitly ruled out.' :
+      has(t,'assessment') ? 'Assessment present but no explicit red flag/typology statement.' :
+      'No red flag or typology identification in narration.');
+
+    // CP6: SOP/Policy Compliance (7 pts)
+    const sopFrac = (tmplFrac * 0.5)
+                  + (clar.frac * 0.3)
+                  + (has(t,'acctStatus') ? 0.1 : 0)
+                  + (has(t,'alertTrig')  ? 0.1 : 0)
+                  - (has(t,'placeholder') ? 0.3 : 0);
+    add(6, pts(Math.max(0, Math.min(1, sopFrac)), 7), 7, true,
+      sopFrac >= 0.8 ? 'Narration follows SOP template format.' :
+      has(t,'placeholder') ? 'Unfilled placeholders — SOP compliance impacted.' :
+      'Format deviations from SOP narration template detected.');
+
+    // CP7: System/Tracker Update — N/A from remark alone
+    add(7, 0, 10, false, '');
+
+    // CP8: Timeliness — N/A from remark alone
+    add(8, 0, 8, false, '');
+  }
+
+  // ─── Compute totals ───
+  const cl = CHECKLISTS[level];
+  let raw = 0, maxA = 0, critFail = false;
+  cl.forEach(c => {
+    const r = cps.find(x => x.sno === c.sno);
+    if (r.assessable) {
+      raw  += r.score;
+      maxA += c.points;
+      if (c.type === 'Critical' && r.score / c.points < 0.4) critFail = true;
+    }
+  });
+
+  const pct = maxA ? Math.round(raw / maxA * 100) : 0;
+  let verdict = pct >= 85 ? 'PASS' : pct >= 65 ? 'NEEDS_IMPROVEMENT' : 'FAIL';
+  if (critFail && verdict === 'PASS') verdict = 'NEEDS_IMPROVEMENT';
+
+  // Top fix hint: weakest critical checkpoint
+  const critCps = cl.filter(c => c.type === 'Critical')
+    .map(c => ({ c, r: cps.find(x => x.sno === c.sno) }))
+    .filter(x => x.r.assessable)
+    .sort((a, b) => (a.r.score / a.c.points) - (b.r.score / b.c.points));
+  const worst = critCps[0];
+  const hint = worst && worst.r.score / worst.c.points < 1
+    ? `Strengthen "${worst.c.checkpoint}" — ${worst.r.finding}`
+    : 'All assessable critical checkpoints fully met — maintain this standard.';
+
+  const summary =
+    `${presentCount}/7 template sections fully present (${partialCount} partial, ${tmpl.filter(x=>x.status==='missing').length} missing). ` +
+    (has(t,'placeholder') ? 'Unfilled placeholders detected. ' : '') +
+    (critFail ? 'A critical checkpoint scored below 40%.' :
+     pct >= 85 ? 'Meets the quality bar.' : 'Needs strengthening on flagged checkpoints.');
+
+  return {
+    checkpoints: cps,
+    template: tmpl.map(({section,status,note}) => ({section,status,note})),
+    summary, verdict,
+    rewrite_hint: hint,
+    pct, raw, maxAssessable: maxA
+  };
+}
+
+function computeTotals(level, result) {
+  const cl = CHECKLISTS[level];
+  let raw = 0, maxA = 0, critLost = 0;
+  cl.forEach(c => {
+    const r = result.checkpoints.find(x => x.sno === c.sno);
+    if (r.assessable) {
+      raw  += r.score;
+      maxA += c.points;
+      if (c.type === 'Critical') critLost += c.points - r.score;
+    }
+  });
+  return { raw, maxAssessable: maxA, pct: maxA ? Math.round(raw/maxA*100) : 0, criticalLost: critLost };
+}
+
+// ═══════════════════════ UI ═══════════════════════
+let level = 'L2', mode = 'csv', csvRows = [], csvCols = [], dualResults = [], pasteResults = [];
+const $  = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const vColor  = v => v==='PASS'?'var(--green)':v==='FAIL'?'var(--red)':v==='NO_REMARK'?'var(--dim)':'var(--amber)';
+const sColor  = s => s==='present'?'var(--green)':s==='partial'?'var(--amber)':'var(--red)';
+const pctColor = p => p>=85?'var(--green)':p>=65?'var(--amber)':'var(--red)';
+
+function setLevel(l) {
+  level = l;
+  $('btnL1').classList.toggle('active', l==='L1');
+  $('btnL2').classList.toggle('active', l==='L2');
+  $('singleLvlLabel').textContent = l;
+  $('bulkLvlLabel').textContent = l;
+  $('singleResult').innerHTML = '';
+  if (mode==='bulk') { pasteResults=[]; $('bulkResult').innerHTML=''; $('exportBtn2').classList.add('hidden'); }
+}
+function setMode(m) {
+  mode = m;
+  ['csv','single','bulk'].forEach(x => {
+    $('pill-'+x).classList.toggle('active', x===m);
+    $('mode-'+x).classList.toggle('hidden', x!==m);
+  });
+  $('lvlToggle').style.visibility = m==='csv' ? 'hidden' : 'visible';
+  $('singleResult').innerHTML = ''; $('bulkResult').innerHTML = '';
+  if (m==='csv'  && dualResults.length)  renderDual();
+  if (m==='bulk' && pasteResults.length) renderPaste();
+}
+setMode('csv');
+
+function scoreOrNull(lvl, remark) {
+  const t = String(remark ?? '').trim();
+  if (!t || ['null','none','na','n/a'].includes(t.toLowerCase())) return null;
+  return scoreRemarkRules(lvl, t);
+}
+
+// ─── Render helpers ───
+function checkpointList(lvl, result) {
+  return CHECKLISTS[lvl].map(c => {
+    const r    = result.checkpoints.find(x => x.sno === c.sno);
+    const na   = !r.assessable;
+    const frac = na ? 0 : r.score / c.points;
+    const col  = na ? 'var(--dim)' : frac >= 0.8 ? 'var(--green)' : frac >= 0.5 ? 'var(--amber)' : 'var(--red)';
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px">
+        <span style="font-weight:600">${c.sno}. ${esc(c.checkpoint)}
+          <span class="tag ${c.type==='Critical'?'crit':'noncrit'}">${c.type==='Critical'?'CRIT':'NC'}</span></span>
+        <span class="mono" style="font-weight:700;color:${col};white-space:nowrap">${na ? 'N/A' : r.score+'/'+c.points}</span>
+      </div>
+      <div class="bar" style="margin:4px 0"><div style="width:${frac*100}%;background:${col}"></div></div>
+      <div class="small" style="line-height:1.45">${na
+        ? 'Not assessable from remark — verify in system.'
+        : esc(r.finding)}</div>
+    </div>`;
+  }).join('');
+}
+
+function levelDetail(lvl, res, agent) {
+  if (!res) return `<div><div class="label">${lvl} — ${esc(agent||'')}</div>
+    <div class="small">No ${lvl} remark to score.</div></div>`;
+  return `<div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+      <span class="label" style="margin:0">${lvl}${agent?' — '+esc(agent):''}</span>
+      <span class="scorechip" style="color:${pctColor(res.pct)};border-color:${pctColor(res.pct)}">${res.pct} / 100</span>
+      <span class="mono" style="font-size:11px;color:${vColor(res.verdict)};font-weight:800">${esc(res.verdict).replace('_',' ')}</span>
+    </div>
+    ${checkpointList(lvl, res)}
+    <div style="font-size:12px;color:var(--gold);margin-top:6px">Top fix → ${esc(res.rewrite_hint)}</div>
+  </div>`;
+}
+
+function agentSummary() {
+  const acc = { L1:{}, L2:{} };
+  dualResults.forEach(r => {
+    [['L1',r.l1Agent,r.l1],['L2',r.l2Agent,r.l2]].forEach(([lvl,agent,res]) => {
+      if (!res) return;
+      const name = (agent||'').trim() || '(unassigned)';
+      const a = acc[lvl][name] ?? (acc[lvl][name] = {agent:name,cases:0,sum:0,pass:0,ni:0,fail:0,best:-1,worst:101});
+      a.cases++; a.sum += res.pct;
+      a.best = Math.max(a.best, res.pct); a.worst = Math.min(a.worst, res.pct);
+      if (res.verdict==='PASS') a.pass++; else if (res.verdict==='FAIL') a.fail++; else a.ni++;
+    });
+  });
+  const fin = o => Object.values(o).map(a => ({...a, avg:Math.round(a.sum/a.cases)})).sort((x,y) => y.avg-x.avg);
+  return { L1: fin(acc.L1), L2: fin(acc.L2) };
+}
+
+function agentTable(lvl, list) {
+  if (!list.length) return '';
+  return `<div style="flex:1;min-width:320px">
+    <div class="label" style="padding:0 0 6px">${lvl} AGENTS</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <tr style="color:var(--dim);font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-align:left">
+        <th style="padding:6px 8px;border-bottom:1px solid var(--line)">AGENT</th>
+        <th style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:center">AVG /100</th>
+        <th style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:center">CASES</th>
+        <th style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:center">P / NI / F</th>
+        <th style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:center">BEST · WORST</th>
+      </tr>
+      ${list.map(a => `<tr>
+        <td style="padding:7px 8px;border-bottom:1px solid var(--line);font-weight:700">${esc(a.agent)}</td>
+        <td style="padding:7px 8px;border-bottom:1px solid var(--line);text-align:center">
+          <span class="mono" style="font-weight:800;font-size:15px;color:${pctColor(a.avg)}">${a.avg}</span>
+          <div class="bar"><div style="width:${a.avg}%;background:${pctColor(a.avg)}"></div></div>
+        </td>
+        <td class="mono" style="padding:7px 8px;border-bottom:1px solid var(--line);text-align:center">${a.cases}</td>
+        <td class="mono" style="padding:7px 8px;border-bottom:1px solid var(--line);text-align:center">
+          <span style="color:var(--green)">${a.pass}</span> /
+          <span style="color:var(--amber)">${a.ni}</span> /
+          <span style="color:var(--red)">${a.fail}</span></td>
+        <td class="mono" style="padding:7px 8px;border-bottom:1px solid var(--line);text-align:center;color:var(--dim)">${a.best} · ${a.worst}</td>
+      </tr>`).join('')}
+    </table>
+  </div>`;
+}
+
+function renderDual() {
+  if (!dualResults.length) { $('bulkResult').innerHTML=''; return; }
+  const l1s = dualResults.filter(r => r.l1);
+  const l2s = dualResults.filter(r => r.l2);
+  const avg  = a => a.length ? Math.round(a.reduce((x,y)=>x+y,0)/a.length) : '—';
+  const avgL1 = avg(l1s.map(r => r.l1.pct));
+  const avgL2 = avg(l2s.map(r => r.l2.pct));
+  const ag    = agentSummary();
+
+  const agentCard = (ag.L1.length || ag.L2.length) ? `<div class="card">
+    <div class="sectitle" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <span>AGENT AVERAGE SCORES (OUT OF 100)</span>
+      <button class="btn ghost" style="padding:5px 12px;font-size:11.5px" onclick="exportAgentCsv()">Download Agent Excel</button>
+    </div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;padding:14px 16px">
+      ${agentTable('L1',ag.L1)}
+      ${agentTable('L2',ag.L2)}
+    </div>
+  </div>` : '';
+
+  $('bulkResult').innerHTML = agentCard + `<div class="card">
+    <div class="sectitle">RESULTS — ${dualResults.length} CASE(S)</div>
+    <div class="statstrip">
+      <div class="stat"><div class="v" style="color:${typeof avgL1==='number'?pctColor(avgL1):'var(--dim)'}">${avgL1}</div>
+        <div class="k">AVG L1 SCORE (${l1s.length} scored)</div></div>
+      <div class="stat"><div class="v" style="color:${typeof avgL2==='number'?pctColor(avgL2):'var(--dim)'}">${avgL2}</div>
+        <div class="k">AVG L2 SCORE (${l2s.length} scored)</div></div>
+      <div class="stat"><div class="v" style="color:var(--red)">
+        ${l1s.filter(r=>r.l1.verdict==='FAIL').length + l2s.filter(r=>r.l2.verdict==='FAIL').length}
+      </div><div class="k">FAILS (L1+L2)</div></div>
+    </div>
+    ${dualResults.map((r,i) => `<div>
+      <div class="bulkrow" onclick="toggleDual(${i})">
+        <span class="mono" style="font-size:13px;font-weight:700;min-width:100px">${esc(r.caseId)}</span>
+        <span class="scorechip" style="color:${r.l1?pctColor(r.l1.pct):'var(--dim)'};border-color:${r.l1?pctColor(r.l1.pct):'var(--line)'}">L1 ${r.l1?r.l1.pct:'—'}</span>
+        <span class="scorechip" style="color:${r.l2?pctColor(r.l2.pct):'var(--dim)'};border-color:${r.l2?pctColor(r.l2.pct):'var(--line)'}">L2 ${r.l2?r.l2.pct:'—'}</span>
+        <span class="small" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((r.l2||r.l1||{summary:'No remarks present.'}).summary)}</span>
+        <span class="small">${r._open?'▲':'▼'}</span>
+      </div>
+      ${r._open ? `<div style="padding:4px 16px 16px;border-bottom:1px solid var(--line)">
+        <div class="detailcols">
+          ${levelDetail('L1',r.l1,r.l1Agent)}
+          ${levelDetail('L2',r.l2,r.l2Agent)}
+        </div>
+      </div>` : ''}
+    </div>`).join('')}
+  </div>`;
+}
+function toggleDual(i)  { dualResults[i]._open  = !dualResults[i]._open;  renderDual();  }
+
+function renderSingle(result) {
+  const t = computeTotals(level, result);
+  const r = 52, circ = 2*Math.PI*r, col = pctColor(t.pct);
+  $('singleResult').innerHTML = `
+    <div class="panel" style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+      <svg width="140" height="140" viewBox="0 0 140 140">
+        <circle cx="70" cy="70" r="${r}" fill="none" stroke="var(--line)" stroke-width="10"/>
+        <circle cx="70" cy="70" r="${r}" fill="none" stroke="${col}" stroke-width="10"
+          stroke-dasharray="${t.pct/100*circ} ${circ}" stroke-linecap="round" transform="rotate(-90 70 70)"/>
+        <text x="70" y="66" text-anchor="middle" fill="#1E293B" font-size="30" font-weight="700" font-family="var(--mono)">${t.pct}</text>
+        <text x="70" y="88" text-anchor="middle" fill="#94A3B8" font-size="11" font-family="var(--mono)">/ 100</text>
+      </svg>
+      <div style="flex:1;min-width:240px">
+        <span class="verdict" style="color:${vColor(result.verdict)};border-color:${vColor(result.verdict)}">${esc(result.verdict).replace('_',' ')}</span>
+        <p style="margin:10px 0 6px;font-size:14px;line-height:1.6">${esc(result.summary)}</p>
+        <p style="margin:0;font-size:13px;color:var(--gold)">Top fix → ${esc(result.rewrite_hint)}</p>
+        <p class="small mono" style="margin:8px 0 0">Raw ${t.raw}/${t.maxAssessable} assessable pts · Critical pts lost: ${t.criticalLost}</p>
+      </div>
+    </div>
+    <div class="card"><div class="sectitle">CHECKPOINT SCORES — ${level}</div>
+      <div style="padding:12px 16px">${checkpointList(level, result)}</div>
+      <div class="scoring-note" style="margin:0 16px 16px">
+        <b>Scoring note:</b> SLA Adherence (L1 CP6) and System/Tracker Updates (L2 CP7) are marked N/A (not assessable from remark text alone — verify in system).
+        All other checkpoints use multi-signal detection with partial credit. Score is normalized over assessable points and displayed out of 100.
+      </div>
+    </div>
+    <div class="card"><div class="sectitle">NARRATION TEMPLATE ADHERENCE</div>
+      <div class="tmplgrid">${result.template.map(x => `
+        <div class="cp">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="dot" style="background:${sColor(x.status)}"></span>
+            <span style="font-weight:700;font-size:13px">${esc(x.section)}</span>
+            <span class="mono" style="margin-left:auto;font-size:11px;color:${sColor(x.status)};text-transform:uppercase;font-weight:700">${esc(x.status)}</span>
+          </div>
+          <div class="small" style="margin-top:5px;line-height:1.45">${esc(x.note)}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function renderPaste() {
+  if (!pasteResults.length) { $('bulkResult').innerHTML=''; return; }
+  $('bulkResult').innerHTML = `<div class="card">
+    <div class="sectitle">RESULTS (${level}) — ${pasteResults.length} CASE(S)</div>
+    ${pasteResults.map((r,i) => `<div>
+      <div class="bulkrow" onclick="togglePaste(${i})">
+        <span class="mono" style="font-size:13px;font-weight:700;min-width:100px">${esc(r.caseId)}</span>
+        <span class="scorechip" style="color:${pctColor(r.res.pct)};border-color:${pctColor(r.res.pct)}">${r.res.pct} / 100</span>
+        <span class="mono" style="font-size:11.5px;color:${vColor(r.res.verdict)};font-weight:800">${esc(r.res.verdict).replace('_',' ')}</span>
+        <span class="small" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.res.summary)}</span>
+        <span class="small">${r._open?'▲':'▼'}</span>
+      </div>
+      ${r._open ? `<div style="padding:4px 16px 16px;border-bottom:1px solid var(--line)">
+        ${checkpointList(level,r.res)}
+        <div style="font-size:12px;color:var(--gold);margin-top:6px">Top fix → ${esc(r.res.rewrite_hint)}</div>
+      </div>` : ''}
+    </div>`).join('')}
+  </div>`;
+}
+function togglePaste(i) { pasteResults[i]._open = !pasteResults[i]._open; renderPaste(); }
+
+// ─── CSV handling ───
+const dz = $('dropzone');
+dz.addEventListener('dragover', e => e.preventDefault());
+dz.addEventListener('drop', e => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]); });
+$('fileInput').addEventListener('change', e => handleFile(e.target.files?.[0]));
+const guessCol = (cols, pats) => cols.find(c => pats.some(p => c.toLowerCase().replace(/[^a-z0-9]/g,'').includes(p))) || '';
+
+function handleFile(file) {
+  if (!file) return;
+  Papa.parse(file, {header:true, skipEmptyLines:true, complete:(res) => {
+    csvRows = res.data; csvCols = res.meta.fields || [];
+    $('dropLabel').textContent = `Loaded: ${file.name} (${csvRows.length} rows)`;
+    dz.classList.add('loaded');
+    const opts = none => `<option value="">${none}</option>` + csvCols.map(c => `<option>${esc(c)}</option>`).join('');
+    $('idCol').innerHTML    = opts('— none —');
+    $('l1Col').innerHTML    = opts('— none —');
+    $('l2Col').innerHTML    = opts('— none —');
+    $('l1AgentCol').innerHTML = opts('— none —');
+    $('l2AgentCol').innerHTML = opts('— none —');
+    $('idCol').value       = guessCol(csvCols,['caseid']) || guessCol(csvCols,['id']);
+    $('l1Col').value       = guessCol(csvCols,['l1remarks','l1remark','l1_remark']);
+    $('l2Col').value       = guessCol(csvCols,['l2remarks','l2remark','l2_remark']);
+    $('l1AgentCol').value  = guessCol(csvCols,['l1agent','agent1']);
+    $('l2AgentCol').value  = guessCol(csvCols,['l2agent','agent2']);
+    $('csvControls').classList.remove('hidden');
+    $('runCsv').textContent = `Score ${csvRows.length} cases`;
+    $('csvErr').classList.add('hidden');
+  }, error:() => { $('csvErr').textContent='Could not parse the CSV file.'; $('csvErr').classList.remove('hidden'); }});
+}
+
+function runCsv() {
+  const l1c = $('l1Col').value, l2c = $('l2Col').value, ic = $('idCol').value;
+  const a1  = $('l1AgentCol').value, a2 = $('l2AgentCol').value;
+  if (!l1c && !l2c) { $('csvErr').textContent='Select at least one remark column (L1 or L2).'; $('csvErr').classList.remove('hidden'); return; }
+  $('csvErr').classList.add('hidden');
+  dualResults = csvRows.map(row => ({
+    row,
+    caseId:   ic ? String(row[ic] ?? '(no id)') : '(no id)',
+    l1Agent:  a1 ? String(row[a1] ?? '') : '',
+    l2Agent:  a2 ? String(row[a2] ?? '') : '',
+    l1: l1c ? scoreOrNull('L1', row[l1c]) : null,
+    l2: l2c ? scoreOrNull('L2', row[l2c]) : null,
+  }));
+  renderDual();
+  $('exportBtn').classList.remove('hidden');
+}
+
+// ─── Excel export helpers ───
+function scoreCols(lvl, res) {
+  const cl = CHECKLISTS[lvl];
+  if (!res) return {
+    [`${lvl}_score_pct`]: '',
+    [`${lvl}_verdict`]:   'NO_REMARK',
+    [`${lvl}_critical_pts_lost`]: '',
+    ...Object.fromEntries(cl.map(c => [`${lvl}_cp${c.sno}_${c.checkpoint.replace(/[^a-z0-9]+/gi,'_')}`, ''])),
+    [`${lvl}_qc_summary`]: '',
+    [`${lvl}_top_fix`]:    '',
+  };
+  const t = computeTotals(lvl, res);
+  return {
+    [`${lvl}_score_pct`]:          res.pct,
+    [`${lvl}_verdict`]:            res.verdict,
+    [`${lvl}_critical_pts_lost`]:  t.criticalLost,
+    ...Object.fromEntries(cl.map(c => {
+      const x = res.checkpoints.find(k => k.sno === c.sno);
+      return [`${lvl}_cp${c.sno}_${c.checkpoint.replace(/[^a-z0-9]+/gi,'_')}`, x.assessable ? x.score : 'NA'];
+    })),
+    [`${lvl}_qc_summary`]: res.summary,
+    [`${lvl}_top_fix`]:    res.rewrite_hint,
+  };
+}
+
+function _xlS() {
+  return {
+    title:  {font:{bold:true,color:{rgb:'1E3A5F'},sz:14},fill:{fgColor:{rgb:'DBEAFE'},patternType:'solid'},alignment:{horizontal:'center',vertical:'center'}},
+    sub:    {font:{color:{rgb:'64748B'},sz:9,italic:true},fill:{fgColor:{rgb:'F8FAFC'},patternType:'solid'}},
+    blank:  {fill:{fgColor:{rgb:'FFFFFF'},patternType:'solid'}},
+    srcHdr: {font:{bold:true,color:{rgb:'1E3A5F'},sz:10},fill:{fgColor:{rgb:'DBEAFE'},patternType:'solid'},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{bottom:{style:'medium',color:{rgb:'2563EB'}}}},
+    l1Hdr:  {font:{bold:true,color:{rgb:'14532D'},sz:10},fill:{fgColor:{rgb:'DCFCE7'},patternType:'solid'},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{bottom:{style:'medium',color:{rgb:'16A34A'}}}},
+    l2Hdr:  {font:{bold:true,color:{rgb:'4C1D95'},sz:10},fill:{fgColor:{rgb:'EDE9FE'},patternType:'solid'},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{bottom:{style:'medium',color:{rgb:'7C3AED'}}}},
+    secSrc: {font:{bold:true,color:{rgb:'1E3A5F'},sz:11},fill:{fgColor:{rgb:'BFDBFE'},patternType:'solid'},alignment:{horizontal:'center',vertical:'center'}},
+    secL1:  {font:{bold:true,color:{rgb:'14532D'},sz:11},fill:{fgColor:{rgb:'BBF7D0'},patternType:'solid'},alignment:{horizontal:'center',vertical:'center'}},
+    secL2:  {font:{bold:true,color:{rgb:'4C1D95'},sz:11},fill:{fgColor:{rgb:'DDD6FE'},patternType:'solid'},alignment:{horizontal:'center',vertical:'center'}},
+    even:   {font:{color:{rgb:'1E293B'},sz:10},fill:{fgColor:{rgb:'FFFFFF'},patternType:'solid'},alignment:{vertical:'top'}},
+    odd:    {font:{color:{rgb:'1E293B'},sz:10},fill:{fgColor:{rgb:'F8FAFC'},patternType:'solid'},alignment:{vertical:'top'}},
+    na:     {font:{color:{rgb:'94A3B8'},sz:9,italic:true},fill:{fgColor:{rgb:'F8FAFC'},patternType:'solid'},alignment:{horizontal:'center'}},
+    score:  p => ({font:{bold:true,color:{rgb:p>=85?'15803D':p>=65?'B45309':'B91C1C'},sz:12},fill:{fgColor:{rgb:p>=85?'DCFCE7':p>=65?'FEF3C7':'FEE2E2'},patternType:'solid'},alignment:{horizontal:'center',vertical:'center'}}),
+    verdict:v => ({font:{bold:true,color:{rgb:v==='PASS'?'15803D':v==='FAIL'?'B91C1C':'B45309'},sz:10},fill:{fgColor:{rgb:v==='PASS'?'DCFCE7':v==='FAIL'?'FEE2E2':'FEF3C7'},patternType:'solid'},alignment:{horizontal:'center',vertical:'center'}}),
+    cpNum: (frac,even) => ({font:{bold:true,color:{rgb:frac>=0.8?'15803D':frac>=0.5?'B45309':'B91C1C'},sz:10},fill:{fgColor:{rgb:even?'FFFFFF':'F8FAFC'},patternType:'solid'},alignment:{horizontal:'center'}}),
+  };
+}
+
+function _agentSheet(WB, S) {
+  const ag = agentSummary(), nc = 9, bk = n => Array(n).fill({v:'',s:S.blank});
+  const rows = [];
+  rows.push([{v:'AML QC — Agent Performance Summary',s:S.title},...bk(nc-1)]);
+  rows.push([{v:'Generated: '+new Date().toLocaleString(),s:S.sub},...bk(nc-1)]);
+  rows.push(bk(nc));
+  ['L1','L2'].forEach(lvl => {
+    if (!ag[lvl].length) return;
+    const hs = lvl==='L1' ? S.l1Hdr : S.l2Hdr;
+    const ss = lvl==='L1' ? S.secL1 : S.secL2;
+    rows.push([{v:lvl+' AGENT PERFORMANCE',s:ss},...bk(nc-1)]);
+    rows.push(['AGENT NAME','AVG SCORE /100','CASES SCORED','PASS','NEEDS IMPROVEMENT','FAIL','PASS RATE %','BEST SCORE','WORST SCORE'].map(h=>({v:h,s:hs})));
+    ag[lvl].forEach((a,i) => {
+      const even = i%2===0, base = even?S.even:S.odd, pr = Math.round(a.pass/a.cases*100);
+      rows.push([
+        {v:a.agent,s:{...base,font:{...base.font,bold:true}}},
+        {v:a.avg,t:'n',s:S.score(a.avg)},
+        {v:a.cases,t:'n',s:{...base,alignment:{horizontal:'center'}}},
+        {v:a.pass,t:'n',s:{font:{bold:true,color:{rgb:'3DC98A'},sz:10},fill:{fgColor:{rgb:even?'F0FDF4':'DCFCE7'},patternType:'solid'},alignment:{horizontal:'center'}}},
+        {v:a.ni,t:'n',s:{font:{bold:true,color:{rgb:'B45309'},sz:10},fill:{fgColor:{rgb:even?'FFFBEB':'FEF3C7'},patternType:'solid'},alignment:{horizontal:'center'}}},
+        {v:a.fail,t:'n',s:{font:{bold:true,color:{rgb:'B91C1C'},sz:10},fill:{fgColor:{rgb:even?'FFF5F5':'FEE2E2'},patternType:'solid'},alignment:{horizontal:'center'}}},
+        {v:pr,t:'n',s:S.score(pr)},
+        {v:a.best,t:'n',s:{...base,font:{...base.font,color:{rgb:'15803D'},bold:true},alignment:{horizontal:'center'}}},
+        {v:a.worst,t:'n',s:{...base,font:{...base.font,color:{rgb:'B91C1C'},bold:true},alignment:{horizontal:'center'}}},
+      ]);
+    });
+    rows.push(bk(nc));
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:nc-1}},{s:{r:1,c:0},e:{r:1,c:nc-1}},{s:{r:2,c:0},e:{r:2,c:nc-1}}];
+  ws['!cols'] = [{wch:25},{wch:15},{wch:14},{wch:8},{wch:18},{wch:8},{wch:12},{wch:12},{wch:12}];
+  ws['!rows'] = [{hpt:32},{hpt:18},{hpt:6}];
+  XLSX.utils.book_append_sheet(WB, ws, 'Agent Summary');
+}
+
+function exportCsv() {
+  const S = _xlS(), WB = XLSX.utils.book_new();
+  const srcKeys = csvRows.length ? Object.keys(csvRows[0]) : [];
+  const l1Keys  = Object.keys(scoreCols('L1', dualResults.find(r=>r.l1)?.l1||null));
+  const l2Keys  = Object.keys(scoreCols('L2', dualResults.find(r=>r.l2)?.l2||null));
+  const allCols = [...srcKeys,...l1Keys,...l2Keys], nc = allCols.length;
+  const bk = n => Array(n).fill({v:'',s:S.blank});
+  const bf = (c,n) => Array(n).fill({v:'',s:{fill:{fgColor:{rgb:c},patternType:'solid'}}});
+  const secRow = [
+    ...(srcKeys.length?[{v:'SOURCE DATA',s:S.secSrc},...bf('1E3652',srcKeys.length-1)]:[]),
+    ...(l1Keys.length?[{v:'L1 QC SCORES',s:S.secL1},...bf('0F2540',l1Keys.length-1)]:[]),
+    ...(l2Keys.length?[{v:'L2 QC SCORES',s:S.secL2},...bf('0A1F15',l2Keys.length-1)]:[]),
+  ];
+  const hdrRow = [
+    ...srcKeys.map(c=>({v:c.toUpperCase(),s:S.srcHdr})),
+    ...l1Keys.map(c=>({v:c.replace(/^L1_/,'').replace(/_/g,' ').toUpperCase(),s:S.l1Hdr})),
+    ...l2Keys.map(c=>({v:c.replace(/^L2_/,'').replace(/_/g,' ').toUpperCase(),s:S.l2Hdr})),
+  ];
+  const dataRows = dualResults.map((r,idx) => {
+    const full = {...r.row,...scoreCols('L1',r.l1),...scoreCols('L2',r.l2)};
+    const even = idx%2===0, base = even?S.even:S.odd;
+    return allCols.map(col => {
+      const v = full[col] ?? '';
+      if (/^L[12]_score_pct$/.test(col)) { if(v===''||v===null) return{v:'—',s:S.na}; const n=Number(v); return{v:n,t:'n',s:S.score(n)}; }
+      if (/^L[12]_verdict$/.test(col))   { const vs=String(v||''); if(!vs||vs==='NO_REMARK') return{v:'NO REMARK',s:S.na}; return{v:vs.replace(/_/g,' '),s:S.verdict(vs)}; }
+      const cm = col.match(/^(L[12])_cp(\d+)_/);
+      if (cm) { if(v==='NA'||v==='') return{v:'N/A',s:S.na}; const n=Number(v),maxP=CHECKLISTS[cm[1]].find(c=>c.sno===Number(cm[2]))?.points||1; return{v:n,t:'n',s:S.cpNum(n/maxP,even)}; }
+      if (/critical_pts_lost/.test(col)) { if(v===''||v===null) return{v:'—',s:S.na}; const n=Number(v); return{v:n,t:'n',s:{font:{bold:true,color:{rgb:n>0?'B91C1C':'15803D'},sz:10},fill:{fgColor:{rgb:even?'FFFFFF':'F8FAFC'},patternType:'solid'},alignment:{horizontal:'center'}}}; }
+      if (/qc_summary|top_fix/.test(col)) return{v:String(v),s:{...base,alignment:{wrapText:true,vertical:'top'}}};
+      return{v:String(v),s:base};
+    });
+  });
+  const now = new Date().toLocaleString();
+  const wsData = [
+    [{v:'AML Remark QC Scoring Report — L1 + L2',s:S.title},...bk(nc-1)],
+    [{v:`Generated: ${now}   |   Cases: ${dualResults.length}   |   L1: ${dualResults.filter(r=>r.l1).length} scored   |   L2: ${dualResults.filter(r=>r.l2).length} scored`,s:S.sub},...bk(nc-1)],
+    bk(nc), secRow, hdrRow, ...dataRows,
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  const merges = [{s:{r:0,c:0},e:{r:0,c:nc-1}},{s:{r:1,c:0},e:{r:1,c:nc-1}},{s:{r:2,c:0},e:{r:2,c:nc-1}}];
+  if (srcKeys.length) merges.push({s:{r:3,c:0},e:{r:3,c:srcKeys.length-1}});
+  if (l1Keys.length)  merges.push({s:{r:3,c:srcKeys.length},e:{r:3,c:srcKeys.length+l1Keys.length-1}});
+  if (l2Keys.length)  merges.push({s:{r:3,c:srcKeys.length+l1Keys.length},e:{r:3,c:nc-1}});
+  ws['!merges'] = merges;
+  ws['!cols']   = allCols.map(c=>({wch:/remark|summary|top_fix/i.test(c)?45:/score_pct|verdict/.test(c)?14:/cp\d+/.test(c)?10:/critical_pts/.test(c)?14:20}));
+  ws['!rows']   = [{hpt:32},{hpt:18},{hpt:6},{hpt:20},{hpt:28}];
+  XLSX.utils.book_append_sheet(WB, ws, 'QC Scores');
+  _agentSheet(WB, S);
+  XLSX.writeFile(WB, 'aml_qc_report.xlsx');
+}
+
+function exportAgentCsv() {
+  const S = _xlS(), WB = XLSX.utils.book_new();
+  _agentSheet(WB, S);
+  XLSX.writeFile(WB, 'aml_qc_agent_summary.xlsx');
+}
+
+function runSingle() {
+  const remark = $('singleRemark').value.trim();
+  if (!remark) return;
+  renderSingle(scoreRemarkRules(level, remark));
+}
+
+function runBulk() {
+  const rows = $('bulkText').value.split('\n')
+    .map(l => l.trim()).filter(Boolean)
+    .map(line => {
+      const i = line.indexOf('|');
+      return i > -1
+        ? { caseId: line.slice(0,i).trim(), remark: line.slice(i+1).trim() }
+        : { caseId: '(no id)', remark: line };
+    }).filter(r => r.remark);
+  if (!rows.length) return;
+  pasteResults = rows.map(r => ({...r, res: scoreRemarkRules(level, r.remark)}));
+  renderPaste();
+  $('exportBtn2').classList.remove('hidden');
+}
+
+function exportPasteCsv() {
+  const S = _xlS(), WB = XLSX.utils.book_new();
+  const cl = CHECKLISTS[level];
+  const hs = level==='L1' ? S.l1Hdr : S.l2Hdr;
+  const ss = level==='L1' ? S.secL1 : S.secL2;
+  const cpCols = cl.map(c => 'CP'+c.sno+': '+c.checkpoint);
+  const cols   = ['CASE ID','REMARK',level+' SCORE /100',level+' VERDICT',...cpCols,level+' QC SUMMARY'];
+  const ncc = cols.length, bk = n => Array(n).fill({v:'',s:S.blank});
+  const wsData = [
+    [{v:'AML '+level+' QC Scoring Results',s:S.title},...bk(ncc-1)],
+    [{v:'Generated: '+new Date().toLocaleString()+'   |   Cases: '+pasteResults.length,s:S.sub},...bk(ncc-1)],
+    bk(ncc),
+    [{v:level+' QC SCORES',s:ss},...bk(ncc-1)],
+    cols.map(h => ({v:h,s:hs})),
+    ...pasteResults.map((r,idx) => {
+      const even = idx%2===0, base = even?S.even:S.odd;
+      return [
+        {v:r.caseId,s:{...base,font:{...base.font,bold:true}}},
+        {v:r.remark,s:{...base,alignment:{wrapText:true,vertical:'top'}}},
+        {v:r.res.pct,t:'n',s:S.score(r.res.pct)},
+        {v:r.res.verdict.replace(/_/g,' '),s:S.verdict(r.res.verdict)},
+        ...cl.map(c => { const x=r.res.checkpoints.find(k=>k.sno===c.sno); if(!x.assessable) return{v:'N/A',s:S.na}; return{v:x.score,t:'n',s:S.cpNum(x.score/c.points,even)}; }),
+        {v:r.res.summary,s:{...base,alignment:{wrapText:true,vertical:'top'}}},
+      ];
+    }),
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:ncc-1}},{s:{r:1,c:0},e:{r:1,c:ncc-1}},{s:{r:2,c:0},e:{r:2,c:ncc-1}},{s:{r:3,c:0},e:{r:3,c:ncc-1}}];
+  ws['!cols'] = [{wch:15},{wch:50},{wch:14},{wch:18},...cl.map(()=>({wch:10})),{wch:50}];
+  ws['!rows'] = [{hpt:32},{hpt:18},{hpt:6},{hpt:20},{hpt:28}];
+  XLSX.utils.book_append_sheet(WB, ws, level+' QC Results');
+  XLSX.writeFile(WB, 'aml_'+level+'_qc_results.xlsx');
+}
+</script>
+</body>
+</html>

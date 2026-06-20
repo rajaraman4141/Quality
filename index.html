@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Login — AML QC Engine</title>
+<style>
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:#F1F5F9;
+    font-family:'Segoe UI',system-ui,sans-serif;
+    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+  }
+  .card{
+    background:#fff;border:1px solid #E2E8F0;border-radius:14px;
+    padding:44px 40px;width:100%;max-width:420px;
+    box-shadow:0 4px 28px rgba(0,0,0,.09);
+  }
+  .logo{text-align:center;margin-bottom:32px}
+  .badge{
+    display:inline-flex;align-items:center;gap:6px;
+    background:#EFF6FF;color:#2563EB;font-size:11px;font-weight:700;
+    padding:4px 12px;border-radius:20px;border:1px solid #BFDBFE;
+    margin-bottom:12px;letter-spacing:.04em;text-transform:uppercase;
+  }
+  .eyebrow{font-size:11.5px;color:#94A3B8;margin-bottom:6px;font-weight:500}
+  h1{margin:0;font-size:21px;font-weight:700;color:#1E293B}
+  .divider{height:1px;background:#F1F5F9;margin:24px 0}
+  .field{margin-bottom:18px}
+  label{display:block;font-size:11.5px;font-weight:700;color:#64748B;margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase}
+  input{
+    width:100%;border:1.5px solid #E2E8F0;border-radius:8px;
+    padding:11px 14px;font-size:14px;color:#1E293B;font-family:inherit;
+    transition:border-color .15s;background:#fff;
+  }
+  input:focus{outline:none;border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+  .btn{
+    width:100%;padding:13px;background:#2563EB;color:#fff;border:none;
+    border-radius:8px;font-weight:700;font-size:15px;cursor:pointer;
+    transition:background .15s;margin-top:6px;letter-spacing:.01em;
+  }
+  .btn:hover{background:#1d4ed8}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .err{
+    background:#FEF2F2;border:1px solid #FECACA;border-left:3px solid #DC2626;
+    color:#B91C1C;font-size:13px;padding:10px 13px;border-radius:7px;margin-top:14px;
+  }
+  .footer-note{text-align:center;font-size:11.5px;color:#94A3B8;margin-top:22px;line-height:1.6}
+  @media(max-width:480px){.card{padding:32px 22px}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="badge">&#9632; AML Quality Control</div>
+    <div class="eyebrow">Slice Bank · Internal Tool</div>
+    <h1>Sign in to QC Engine</h1>
+  </div>
+
+  <form id="loginForm" onsubmit="handleLogin(event)" autocomplete="on">
+    <div class="field">
+      <label for="empId">Employee ID</label>
+      <input id="empId" type="text" placeholder="e.g. EMP001" autocomplete="username" spellcheck="false" required />
+    </div>
+    <div class="field">
+      <label for="pwd">Password</label>
+      <input id="pwd" type="password" placeholder="Enter your password" autocomplete="current-password" required />
+    </div>
+    <button class="btn" id="loginBtn" type="submit">Sign In</button>
+    <div class="err" id="errBox" style="display:none"></div>
+  </form>
+
+  <p class="footer-note">Access issues? Contact your team admin to reset credentials.</p>
+</div>
+
+<script>
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  const errBox = document.getElementById('errBox');
+  const empId = document.getElementById('empId').value.trim().toUpperCase();
+  const pwd = document.getElementById('pwd').value;
+
+  btn.disabled = true;
+  btn.textContent = 'Verifying…';
+  errBox.style.display = 'none';
+
+  try {
+    const res = await fetch('credentials.json?_=' + Date.now());
+    if (!res.ok) throw new Error('Could not load credentials file.');
+    const creds = await res.json();
+
+    if (!creds[empId]) {
+      showError('Employee ID not recognised. Check with your admin.');
+      return;
+    }
+
+    const hash = await sha256(pwd);
+    if (hash !== creds[empId]) {
+      showError('Incorrect password. Please try again.');
+      return;
+    }
+
+    sessionStorage.setItem('aml_user', empId);
+    window.location.href = 'aml_qc_scorer.html';
+  } catch (err) {
+    showError(err.message || 'Login failed. Try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  }
+}
+
+function showError(msg) {
+  const box = document.getElementById('errBox');
+  box.textContent = msg;
+  box.style.display = 'block';
+}
+
+if (sessionStorage.getItem('aml_user')) {
+  window.location.href = 'aml_qc_scorer.html';
+}
+</script>
+</body>
+</html>
