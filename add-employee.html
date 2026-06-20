@@ -3,89 +3,219 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Manage Employees — AML QC Admin</title>
+<title>Access Manager — AML QC Admin</title>
 <style>
   *{box-sizing:border-box}
   body{margin:0;background:#F1F5F9;font-family:'Segoe UI',system-ui,sans-serif;padding:32px 20px;min-height:100vh}
-  .wrap{max-width:680px;margin:0 auto}
-  h1{font-size:20px;font-weight:700;color:#1E293B;margin:0 0 4px}
-  .sub{font-size:13px;color:#64748B;margin-bottom:28px}
-  .panel{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:24px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
-  h2{font-size:14px;font-weight:700;color:#1E293B;margin:0 0 16px}
-  label{display:block;font-size:11.5px;font-weight:700;color:#64748B;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+  .wrap{max-width:700px;margin:0 auto}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:10px}
+  h1{margin:0;font-size:20px;font-weight:700;color:#1E293B}
+  .badge{display:inline-flex;align-items:center;gap:6px;background:#EFF6FF;color:#2563EB;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;border:1px solid #BFDBFE;text-transform:uppercase;letter-spacing:.04em}
+  .panel{background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:22px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+  h2{font-size:13.5px;font-weight:700;color:#1E293B;margin:0 0 16px;display:flex;align-items:center;gap:8px}
+  .count{background:#F1F5F9;color:#64748B;font-size:11px;font-weight:600;padding:2px 9px;border-radius:12px}
+  label{display:block;font-size:11px;font-weight:700;color:#64748B;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
   input{width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:10px 13px;font-size:14px;color:#1E293B;font-family:inherit;transition:border-color .15s}
-  input:focus{outline:none;border-color:#2563EB}
-  .field{margin-bottom:14px}
-  .btn{padding:10px 22px;background:#2563EB;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer}
+  input:focus{outline:none;border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  .btn{padding:10px 20px;background:#2563EB;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:13.5px;cursor:pointer;transition:background .15s}
   .btn:hover{background:#1d4ed8}
-  .result{background:#F0FDF4;border:1px solid #BBF7D0;border-left:3px solid #16A34A;border-radius:7px;padding:14px 16px;margin-top:16px;font-size:13px;display:none}
-  code{background:#1E293B;color:#E2E8F0;padding:10px 14px;border-radius:6px;display:block;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:13px;word-break:break-all;margin-top:8px;white-space:pre-wrap}
-  .copy-btn{margin-top:10px;padding:6px 14px;background:#fff;border:1.5px solid #E2E8F0;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;color:#64748B}
-  .warn{background:#FFFBEB;border:1px solid #FDE68A;border-left:3px solid #D97706;border-radius:7px;padding:12px 14px;font-size:13px;color:#92400E;margin-bottom:20px;line-height:1.6}
+  .btn.ghost{background:#fff;color:#64748B;border:1.5px solid #E2E8F0}
+  .btn.ghost:hover{background:#F8FAFC}
+  .btn.danger{background:#fff;color:#DC2626;border:1.5px solid #FECACA;padding:6px 14px;font-size:12px;font-weight:700}
+  .btn.danger:hover{background:#FEF2F2}
+  .btn.green{background:#16A34A}
+  .btn.green:hover{background:#15803d}
+  .emp-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:8px;border:1px solid #E2E8F0;margin-bottom:8px;background:#FAFBFC}
+  .emp-id{font-weight:700;font-size:14px;color:#1E293B;font-family:ui-monospace,'Cascadia Code',Consolas,monospace}
+  .emp-meta{font-size:11.5px;color:#94A3B8;margin-left:8px}
+  .empty{text-align:center;padding:28px;color:#94A3B8;font-size:14px;border:2px dashed #E2E8F0;border-radius:8px}
+  .json-box{background:#1E293B;color:#94A3B8;padding:16px;border-radius:8px;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:12.5px;white-space:pre;overflow-x:auto;line-height:1.7;max-height:240px;overflow-y:auto}
+  .json-key{color:#93C5FD}
+  .json-val{color:#86EFAC}
+  .json-str{color:#FCA5A5}
+  .step{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid #F1F5F9}
+  .step:last-child{border-bottom:none;padding-bottom:0}
+  .step-num{width:24px;height:24px;min-width:24px;background:#2563EB;color:#fff;border-radius:50%;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .step-text{font-size:13.5px;color:#475569;line-height:1.6}
+  .step-text b{color:#1E293B}
+  .info{background:#EFF6FF;border:1px solid #BFDBFE;border-left:3px solid #2563EB;border-radius:7px;padding:11px 14px;font-size:13px;color:#1e40af;margin-bottom:18px;line-height:1.6}
+  .suc{background:#F0FDF4;border:1px solid #BBF7D0;border-left:3px solid #16A34A;color:#15803d;border-radius:7px;padding:10px 14px;font-size:13px;margin-top:10px;display:none}
+  .err{background:#FEF2F2;border:1px solid #FECACA;border-left:3px solid #DC2626;color:#B91C1C;border-radius:7px;padding:10px 14px;font-size:13px;margin-top:10px;display:none}
+  .toolbar{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  a.btn{text-decoration:none;display:inline-block}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Employee Credentials Manager</h1>
-  <p class="sub">Use this tool locally to generate credential entries for credentials.json</p>
-
-  <div class="warn">
-    <b>Admin use only.</b> Do not deploy this page to your public GitHub Pages site.
-    Run it locally by opening the file directly in your browser.
+  <div class="topbar">
+    <div>
+      <div class="badge" style="margin-bottom:6px">&#9632; AML QC · Admin</div>
+      <h1>Access Manager</h1>
+    </div>
+    <button class="btn ghost" onclick="loadCredentials()">&#8635; Refresh</button>
   </div>
 
-  <div class="panel">
-    <h2>Generate Hash for New Employee</h2>
-    <div class="field">
-      <label for="newEmpId">Employee ID</label>
-      <input id="newEmpId" type="text" placeholder="e.g. EMP003" spellcheck="false" />
-    </div>
-    <div class="field">
-      <label for="newPwd">Password</label>
-      <input id="newPwd" type="password" placeholder="Set a strong password" />
-    </div>
-    <button class="btn" onclick="generate()">Generate Entry</button>
-
-    <div class="result" id="result">
-      <b>Add this line to credentials.json:</b>
-      <code id="hashOut"></code>
-      <button class="copy-btn" onclick="copyHash()">Copy</button>
-    </div>
+  <div class="info">
+    This tool lets you add or remove employee access. After making changes, copy the JSON below and save it to <b>credentials.json</b> on GitHub.
   </div>
 
+  <!-- Current Employees -->
   <div class="panel">
-    <h2>How to add to credentials.json</h2>
-    <ol style="font-size:13.5px;color:#475569;line-height:2;padding-left:18px;margin:0">
-      <li>Generate the entry above</li>
-      <li>Open <code style="background:#F1F5F9;color:#1E293B;display:inline;padding:2px 6px;border-radius:4px">credentials.json</code> in a text editor</li>
-      <li>Add the new line inside the <code style="background:#F1F5F9;color:#1E293B;display:inline;padding:2px 6px;border-radius:4px">{ }</code> block (add a comma after the previous line)</li>
-      <li>Save the file and push to GitHub — the change goes live automatically</li>
-    </ol>
+    <h2>Current Employees <span class="count" id="empCount">0</span></h2>
+    <div id="empList"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- Add Employee -->
+  <div class="panel">
+    <h2>Add New Employee</h2>
+    <div class="row2">
+      <div>
+        <label for="newId">Employee ID</label>
+        <input id="newId" type="text" placeholder="e.g. EMP003" spellcheck="false" />
+      </div>
+      <div>
+        <label for="newPwd">Password</label>
+        <input id="newPwd" type="password" placeholder="Set a strong password" />
+      </div>
+    </div>
+    <button class="btn" onclick="addEmployee()">+ Add Employee</button>
+    <div class="suc" id="addSuc">Employee added. Copy the updated JSON below and save to GitHub.</div>
+    <div class="err" id="addErr"></div>
+  </div>
+
+  <!-- Updated JSON -->
+  <div class="panel">
+    <h2>Updated credentials.json</h2>
+    <div class="json-box" id="jsonPreview">{ }</div>
+    <div class="toolbar">
+      <button class="btn green" onclick="copyJson()">&#128203; Copy JSON</button>
+      <a class="btn ghost" id="githubLink" href="#" target="_blank">Open on GitHub &#8599;</a>
+    </div>
+    <div class="suc" id="copySuc" style="display:none">Copied! Now paste it into GitHub file editor and commit.</div>
+  </div>
+
+  <!-- How to save -->
+  <div class="panel">
+    <h2>How to save changes to GitHub</h2>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">Click <b>Copy JSON</b> above</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">Go to your GitHub repo → open <b>credentials.json</b> → click the <b>pencil icon</b> (Edit)</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">Select all the text in the editor (<b>Ctrl+A</b>), then paste (<b>Ctrl+V</b>)</div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-text">Click <b>Commit changes</b> → the update is live in ~30 seconds</div>
+    </div>
   </div>
 </div>
 
 <script>
+let creds = {};
+
 async function sha256(str) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function generate() {
-  const empId = document.getElementById('newEmpId').value.trim().toUpperCase();
-  const pwd = document.getElementById('newPwd').value;
-  if (!empId || !pwd) { alert('Fill in both fields.'); return; }
-  const hash = await sha256(pwd);
-  document.getElementById('hashOut').textContent = `"${empId}": "${hash}"`;
-  document.getElementById('result').style.display = 'block';
+async function loadCredentials() {
+  try {
+    const res = await fetch('credentials.json?_=' + Date.now());
+    if (!res.ok) throw new Error();
+    creds = await res.json();
+    renderList();
+    renderJson();
+  } catch {
+    document.getElementById('empList').innerHTML = '<div class="empty">Could not load credentials.json — make sure this file is in the same folder.</div>';
+  }
 }
 
-function copyHash() {
-  navigator.clipboard.writeText(document.getElementById('hashOut').textContent).then(() => {
-    const btn = document.querySelector('.copy-btn');
-    btn.textContent = 'Copied!';
-    setTimeout(() => btn.textContent = 'Copy', 2000);
+function renderList() {
+  const keys = Object.keys(creds).filter(k => k !== '__admin__');
+  document.getElementById('empCount').textContent = keys.length;
+  if (keys.length === 0) {
+    document.getElementById('empList').innerHTML = '<div class="empty">No employees yet. Add one below.</div>';
+    return;
+  }
+  document.getElementById('empList').innerHTML = keys.map(id => `
+    <div class="emp-row">
+      <div><span class="emp-id">${id}</span><span class="emp-meta">Access: Active</span></div>
+      <button class="btn danger" onclick="removeEmployee('${id}')">Remove</button>
+    </div>`).join('');
+}
+
+function renderJson() {
+  const box = document.getElementById('jsonPreview');
+  const json = JSON.stringify(creds, null, 2);
+  box.textContent = json;
+}
+
+async function addEmployee() {
+  const idInput = document.getElementById('newId');
+  const pwdInput = document.getElementById('newPwd');
+  const suc = document.getElementById('addSuc');
+  const err = document.getElementById('addErr');
+  suc.style.display = 'none';
+  err.style.display = 'none';
+
+  const empId = idInput.value.trim().toUpperCase();
+  const pwd = pwdInput.value;
+
+  if (!empId) { showErr(err, 'Enter an Employee ID.'); return; }
+  if (!pwd || pwd.length < 6) { showErr(err, 'Password must be at least 6 characters.'); return; }
+  if (creds[empId]) { showErr(err, `${empId} already exists. Remove them first to reset.`); return; }
+
+  const hash = await sha256(pwd);
+  creds[empId] = hash;
+  renderList();
+  renderJson();
+  suc.style.display = 'block';
+  idInput.value = '';
+  pwdInput.value = '';
+}
+
+function removeEmployee(id) {
+  if (!confirm(`Remove access for ${id}? They will not be able to log in once you save to GitHub.`)) return;
+  delete creds[id];
+  renderList();
+  renderJson();
+}
+
+function copyJson() {
+  const json = JSON.stringify(creds, null, 2);
+  navigator.clipboard.writeText(json).then(() => {
+    const suc = document.getElementById('copySuc');
+    suc.style.display = 'block';
+    setTimeout(() => suc.style.display = 'none', 4000);
   });
 }
+
+function showErr(el, msg) {
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// Try to set GitHub link from page URL (works when hosted on GitHub Pages)
+(function() {
+  const host = location.hostname;
+  if (host.endsWith('.github.io')) {
+    const parts = location.pathname.split('/').filter(Boolean);
+    const repo = parts[0];
+    const username = host.replace('.github.io', '');
+    document.getElementById('githubLink').href = `https://github.com/${username}/${repo}/edit/main/credentials.json`;
+  } else {
+    document.getElementById('githubLink').style.display = 'none';
+  }
+})();
+
+loadCredentials();
 </script>
 </body>
 </html>
